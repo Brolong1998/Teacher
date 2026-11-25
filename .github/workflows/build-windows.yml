@@ -1,0 +1,48 @@
+name: Build Windows Student EXE
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - "src/ClassRoom.Student/**"
+      - "src/ClassRoom.Server/**"
+      - ".github/workflows/build-windows.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+
+      - name: Install .NET 11 SDK
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "11.0.x"
+
+      - name: Build server
+        run: dotnet build src/ClassRoom.Server/ClassRoom.Server.csproj --configuration Release
+
+      - name: Publish standalone Windows student app
+        run: >-
+          dotnet publish src/ClassRoom.Student/ClassRoom.Student.csproj
+          --configuration Release
+          --runtime win-x64
+          --self-contained true
+          -p:PublishSingleFile=true
+          -p:IncludeNativeLibrariesForSelfExtract=true
+          -p:EnableCompressionInSingleFile=true
+          --output artifacts/student-win-x64
+
+      - name: Upload Student EXE
+        uses: actions/upload-artifact@v4
+        with:
+          name: Student-win-x64
+          path: artifacts/student-win-x64/
+          if-no-files-found: error
+          retention-days: 30
