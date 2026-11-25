@@ -1,5 +1,7 @@
 using System.Net.Http;
 using System.Net.Http.Json;
+using System.IO;
+using System.Text.Json;
 using System.Windows;
 using System.Windows.Threading;
 
@@ -9,6 +11,9 @@ public partial class MainWindow : Window
 {
     private readonly HttpClient _http = new() { Timeout = TimeSpan.FromSeconds(5) };
     private readonly DispatcherTimer _timer = new() { Interval = TimeSpan.FromSeconds(10) };
+    private readonly string _settingsPath = Path.Combine(
+        Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
+        "ClassRoomStudent", "settings.json");
     private string? _taskId;
     private bool _busy;
 
@@ -16,12 +21,49 @@ public partial class MainWindow : Window
     {
         InitializeComponent();
         DeviceBox.Text = Environment.MachineName;
+        LoadSettings();
         _timer.Tick += async (_, _) => await CheckInAsync();
+        Loaded += async (_, _) =>
+        {
+            if (!string.IsNullOrWhiteSpace(ServerBox.Text) &&
+                ServerBox.Text != "http://127.0.0.1:5080")
+                await ConnectAsync();
+        };
     }
 
-    private async void Connect_Click(object sender, RoutedEventArgs e)
+    private void LoadSettings()
     {
-        if (!Uri.TryCreate(ServerBox.Text.TrimEnd('/') + "/", UriKind.Absolute, out var uri) ||
+        try
+        {
+            if (!File.Exists(_settingsPath)) return;
+            var settings = JsonSerializer.Deserialize<StudentSettings>(File.ReadAllText(_settingsPath));
+            if (settings is null) return;
+            if (!string.IsNullOrWhiteSpace(settings.ServerUrl)) ServerBox.Text = settings.ServerUrl;
+            if (!string.IsNullOrWhiteSpace(settings.DeviceName)) DeviceBox.Text = settings.DeviceName;
+        }
+        catch { /* Ignore damaged or outdated local settings and allow manual entry. */ }
+    }
+
+    private void SaveSettings()
+    {
+        try
+        {
+            var directory = Path.GetDirectoryName(_settingsPath)!;
+            Directory.CreateDirectory(directory);
+            var settings = new StudentSettings(ServerBox.Text.Trim().TrimEnd('/'), DeviceBox.Text.Trim());
+            File.WriteAllText(_settingsPath, JsonSerializer.Serialize(settings));
+        }
+        catch (Exception ex)
+        {
+            StatusText.Text = "已连接，但保存设置失败：" + ex.Message;
+        }
+    }
+
+    private async void Connect_Click(object sender, RoutedEventArgs e) => await ConnectAsync();
+
+    private async Task ConnectAsync()
+    {
+        if (!Uri.TryCreate(ServerBox.Text.Trim().TrimEnd('/') + "/", UriKind.Absolute, out var uri) ||
             (uri.Scheme != "http" && uri.Scheme != "https"))
         {
             MessageBox.Show("请输入有效服务器地址，例如 http://192.168.1.100:5080");
@@ -30,28 +72,29 @@ public partial class MainWindow : Window
 
         _http.BaseAddress = uri;
         ConnectButton.IsEnabled = false;
-        try
+        var connected = await CheckInAsync();
+        if (connected)
         {
-            await CheckInAsync();
+            SaveSettings();
             _timer.Start();
-            StatusText.Text = "已连接教师主机，正在接收课堂任务";
+            StatusText.Text = "已连接教师主机，地址已保存；下次启动将自动连接";
             SubmitButton.IsEnabled = true;
         }
-        catch (Exception ex)
+        else
         {
-            StatusText.Text = "连接失败：" + ex.Message;
             ConnectButton.IsEnabled = true;
         }
     }
 
-    private async Task CheckInAsync()
+    private async Task<bool> CheckInAsync()
     {
-        if (_busy || _http.BaseAddress is null) return;
+        if (_busy || _http.BaseAddress is null) return false;
         _busy = true;
         try
         {
-            await _http.PostAsJsonAsync("api/student/heartbeat",
+            using var heartbeat = await _http.PostAsJsonAsync("api/student/heartbeat",
                 new { deviceId = DeviceBox.Text.Trim(), displayName = DeviceBox.Text.Trim() });
+            heartbeat.EnsureSuccessStatusCode();
             var task = await _http.GetFromJsonAsync<TaskDto>("api/student/task");
             if (task is not null && task.Id != _taskId)
             {
@@ -68,10 +111,12 @@ public partial class MainWindow : Window
                 TaskInstructions.Text = "目前没有已发布的课堂任务。";
             }
             else StatusText.Text = "连接正常 · " + DateTime.Now.ToString("HH:mm:ss");
+            return true;
         }
         catch (Exception ex)
         {
-            StatusText.Text = "连接中断：" + ex.Message;
+            StatusText.Text = "连接失败/中断：" + ex.Message;
+            return false;
         }
         finally { _busy = false; }
     }
@@ -95,5 +140,6 @@ public partial class MainWindow : Window
         catch (Exception ex) { MessageBox.Show("提交失败：" + ex.Message); }
     }
 
+    private sealed record StudentSettings(string ServerUrl, string DeviceName);
     private sealed record TaskDto(string Id, string Title, string Instructions, DateTimeOffset CreatedUtc, bool Published);
 }
