@@ -1,0 +1,31 @@
+<Window x:Class="ClassRoom.Student.MainWindow"
+ xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+ xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+ Title="ClassRoom Student" Height="650" Width="900" MinHeight="560" MinWidth="700"
+ WindowStartupLocation="CenterScreen" Background="#F3F6FB">
+ <Grid Margin="24">
+  <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+  <StackPanel>
+   <TextBlock Text="课堂任务" FontSize="30" FontWeight="Bold" Foreground="#17213A"/>
+   <TextBlock Text="ClassRoom Control · 学生端" Foreground="#64748B" Margin="0,4,0,18"/>
+  </StackPanel>
+  <Border Grid.Row="1" Background="White" CornerRadius="12" Padding="16" Margin="0,0,0,14">
+   <Grid><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+    <StackPanel Margin="0,0,10,0"><TextBlock Text="服务器地址"/><TextBox x:Name="ServerBox" Text="http://127.0.0.1:5080" Padding="8"/></StackPanel>
+    <StackPanel Grid.Column="1" Margin="10,0"><TextBlock Text="电脑名称"/><TextBox x:Name="DeviceBox" Padding="8"/></StackPanel>
+    <Button Grid.Column="2" x:Name="ConnectButton" Content="连接课堂" Padding="18,8" VerticalAlignment="Bottom" Click="Connect_Click" Background="#2563EB" Foreground="White"/>
+   </Grid>
+  </Border>
+  <Border Grid.Row="2" Background="White" CornerRadius="12" Padding="22">
+   <StackPanel>
+    <TextBlock x:Name="StatusText" Text="尚未连接教师主机" Foreground="#64748B" FontSize="14"/>
+    <TextBlock x:Name="TaskTitle" Text="等待教师发布任务" FontSize="25" FontWeight="Bold" Margin="0,18,0,10" TextWrapping="Wrap"/>
+    <TextBlock x:Name="TaskInstructions" Text="连接成功后，课堂任务会显示在这里。" FontSize="17" TextWrapping="Wrap" LineHeight="28"/>
+    <TextBlock Text="提交内容" FontWeight="SemiBold" Margin="0,28,0,8"/>
+    <TextBox x:Name="SubmissionBox" Height="130" AcceptsReturn="True" TextWrapping="Wrap" VerticalScrollBarVisibility="Auto" Padding="10"/>
+    <Button x:Name="SubmitButton" Content="提交作业" Width="130" HorizontalAlignment="Left" Margin="0,14,0,0" Click="Submit_Click" IsEnabled="False" Background="#0D9488" Foreground="White" Padding="12,9"/>
+   </StackPanel>
+  </Border>
+  <TextBlock Grid.Row="3" x:Name="FooterText" Text="请使用教师提供的服务器地址连接。此版本不提供强制系统锁定。" Foreground="#64748B" Margin="2,12,0,0"/>
+ </Grid>
+</Window>

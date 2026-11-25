@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>ClassRoom Control｜教師控制台</title>
+<style>
+:root{font-family:Inter,"Noto Sans TC",system-ui,sans-serif;color:#172033;background:#f3f6fb}
+*{box-sizing:border-box}body{margin:0}.top{background:#14213d;color:white;padding:22px 28px;display:flex;justify-content:space-between;align-items:center}
+h1{font-size:22px;margin:0}.sub{color:#b9c5d8;font-size:13px;margin-top:5px}
+main{max-width:1200px;margin:24px auto;padding:0 18px}.toolbar,.panel{background:white;border:1px solid #e2e8f0;border-radius:16px;padding:18px;margin-bottom:18px;box-shadow:0 4px 18px #1720330a}
+.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}.stat{background:#f7f9fc;border-radius:12px;padding:15px}.stat b{font-size:27px;display:block}.muted{color:#718096;font-size:13px}
+.layout{display:grid;grid-template-columns:1fr 1fr;gap:18px}input,textarea,button{font:inherit}input,textarea{width:100%;padding:11px;border:1px solid #cbd5e1;border-radius:9px;margin:7px 0 12px}textarea{min-height:105px;resize:vertical}
+button{background:#2563eb;color:white;border:0;padding:10px 15px;border-radius:9px;cursor:pointer}button:hover{background:#1d4ed8}.secondary{background:#475569}
+.device{display:flex;justify-content:space-between;gap:10px;padding:11px 0;border-bottom:1px solid #edf0f5}.pill{font-size:12px;padding:4px 8px;border-radius:99px}.on{background:#dcfce7;color:#166534}.off{background:#fee2e2;color:#991b1b}
+.notice{color:#b45309;font-size:13px;margin-top:8px}.item{padding:10px 0;border-bottom:1px solid #edf0f5}
+@media(max-width:760px){.layout{grid-template-columns:1fr}.stats{grid-template-columns:1fr 1fr}}
+</style></head>
+<body>
+<header class="top"><div><h1>ClassRoom Control</h1><div class="sub">智慧機房课堂控制台 · LAN MVP 1.0</div></div><div id="connection">尚未连接</div></header>
+<main>
+<section class="toolbar">
+  <div class="stats">
+    <div class="stat"><span class="muted">在线电脑</span><b id="online">0</b></div>
+    <div class="stat"><span class="muted">离线电脑</span><b id="offline">0</b></div>
+    <div class="stat"><span class="muted">提交记录</span><b id="submitted">0</b></div>
+  </div>
+  <p class="notice">提示：离线表示心跳超时，可能是关机、断网或学生端程序退出；系统不能仅凭离线准确判断关机原因。</p>
+</section>
+<div class="layout">
+<section class="panel">
+<h2>发布课堂任务</h2>
+<label>任务名称</label><input id="title" placeholder="例如：完成 HTML 个人网页">
+<label>任务说明</label><textarea id="instructions" placeholder="请写明操作步骤、提交要求和注意事项"></textarea>
+<button onclick="createTask()">发布任务</button><span id="taskMsg" class="muted"></span>
+<h3>任务列表</h3><div id="tasks" class="muted">尚无任务</div>
+</section>
+<section class="panel">
+<h2>学生电脑状态</h2><div id="devices" class="muted">等待学生端连接……</div>
+</section>
+</div>
+<section class="panel"><h2>学生提交记录</h2><div id="submissions" class="muted">尚无提交</div></section>
+<section class="panel">
+<h3>首次使用设置</h3>
+<label>教师 API Key（需与服务器配置一致）</label>
+<input id="key" type="password" placeholder="默认 change-this-teacher-key">
+<button class="secondary" onclick="saveKey()">保存密钥</button>
+<p class="muted">密钥只保存在当前浏览器。正式部署请更换默认密钥，并限制教师后台的网络访问。</p>
+</section>
+</main>
+<script>
+const $=id=>document.getElementById(id);
+let key=sessionStorage.getItem('teacherKey')||'change-this-teacher-key';$('key').value=key;
+function saveKey(){key=$('key').value;sessionStorage.setItem('teacherKey',key);refresh()}
+async function api(path,options={}){const r=await fetch(path,{...options,headers:{'Content-Type':'application/json','X-Teacher-Key':key,...options.headers}});if(!r.ok)throw new Error(r.status===401?'教师密钥错误':`HTTP ${r.status}`);return r.json()}
+async function createTask(){try{const t=await api('/api/teacher/tasks',{method:'POST',body:JSON.stringify({title:$('title').value,instructions:$('instructions').value,published:true})});$('taskMsg').textContent=' 已发布';$('title').value='';$('instructions').value='';refresh()}catch(e){$('taskMsg').textContent=e.message}}
+async function refresh(){try{const d=await api('/api/teacher/overview');$('connection').textContent='服务器连接正常';const online=d.devices.filter(x=>x.online).length;$('online').textContent=online;$('offline').textContent=d.devices.length-online;$('submitted').textContent=d.submissions.length;
+$('devices').innerHTML=d.devices.length?d.devices.map(x=>`<div class="device"><div><b>${esc(x.displayName)}</b><div class="muted">${esc(x.deviceId)} · ${x.lastSeenSecondsAgo} 秒前</div></div><span class="pill ${x.online?'on':'off'}">${x.online?'在线':'离线'}</span></div>`).join(''):'等待学生端连接……';
+$('tasks').innerHTML=d.tasks.length?d.tasks.map(t=>`<div class="item"><b>${esc(t.title)}</b><div class="muted">${esc(t.instructions)}</div></div>`).join(''):'尚无任务';
+$('submissions').innerHTML=d.submissions.length?d.submissions.map(s=>`<div class="item"><b>${esc(s.deviceId)}</b><div>${esc(s.content)}</div><div class="muted">${new Date(s.submittedUtc).toLocaleString()}</div></div>`).join(''):'尚无提交';
+}catch(e){$('connection').textContent='连接失败：'+e.message}}
+function esc(s){return String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
+refresh();setInterval(refresh,3000);
+</script></body></html>
